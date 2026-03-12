@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Academic Audit</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="main-wrapper">
+        <!-- Sidebar -->
+        <nav id="sidebar"></nav>
+
+        <!-- Page Content -->
+        <div id="content">
+            <nav class="top-navbar">
+                <button type="button" id="sidebarCollapse" class="btn btn-light d-md-none">
+                    <i class="bi bi-list"></i>
+                </button>
+                <h4 class="mb-0">Dashboard Overview</h4>
+                <div class="notification-icon" onclick="showNotifications()">
+                    <i class="bi bi-bell-fill"></i>
+                    <span id="notification-badge" class="notification-badge bg-danger" style="display:none;">0</span>
+                </div>
+            </nav>
+
+            <div class="container-fluid">
+                <!-- Stats Cards -->
+                <div class="row g-4 mb-4">
+                    <div class="col-md-3">
+                        <div class="stat-card">
+                            <h6 class="text-muted text-uppercase mb-2">Total Meetings</h6>
+                            <h2 id="totalMeetings" class="mb-0">0</h2>
+                            <i class="bi bi-calendar-check stat-icon text-primary"></i>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-card">
+                            <h6 class="text-muted text-uppercase mb-2">Syllabus Completed</h6>
+                            <h2 id="syllabusPct" class="mb-0">0%</h2>
+                            <i class="bi bi-book stat-icon text-success"></i>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-card">
+                            <h6 class="text-muted text-uppercase mb-2">Attendance</h6>
+                            <h2 id="attendancePct" class="mb-0">0%</h2>
+                            <i class="bi bi-people stat-icon text-warning"></i>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-card">
+                            <h6 class="text-muted text-uppercase mb-2">Overall Score</h6>
+                            <h2 id="overallPct" class="mb-0">0%</h2>
+                            <i class="bi bi-graph-up-arrow stat-icon text-danger"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts -->
+                <div class="row g-4">
+                    <div class="col-md-7">
+                        <div class="card h-100">
+                            <div class="card-header">
+                                Completion Statistics
+                            </div>
+                            <div class="card-body">
+                                <div class="chart-container">
+                                    <canvas id="barChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-5">
+                        <div class="card h-100">
+                            <div class="card-header">
+                                Performance Overview
+                            </div>
+                            <div class="card-body">
+                                <div class="chart-container">
+                                    <canvas id="radarChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Modal -->
+    <div class="modal fade" id="notificationModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Notifications</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-0" id="notificationModalBody">
+                    <!-- Notifications List -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

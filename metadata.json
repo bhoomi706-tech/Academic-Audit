@@ -1,0 +1,5 @@
+{
+  "name": "College Academic Dashboard",
+  "description": "A comprehensive academic dashboard and audit system using local storage.",
+  "requestFramePermissions": []
+}

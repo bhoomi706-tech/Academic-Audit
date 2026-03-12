@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meetings - Academic Audit</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="main-wrapper">
+        <nav id="sidebar"></nav>
+
+        <div id="content">
+            <nav class="top-navbar">
+                <button type="button" id="sidebarCollapse" class="btn btn-light d-md-none">
+                    <i class="bi bi-list"></i>
+                </button>
+                <h4 class="mb-0">Department Meetings</h4>
+                <div class="notification-icon" onclick="showNotifications()">
+                    <i class="bi bi-bell-fill"></i>
+                    <span id="notification-badge" class="notification-badge bg-danger" style="display:none;">0</span>
+                </div>
+            </nav>
+
+            <div class="container-fluid">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span>Meeting Records</span>
+                        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#meetingModal">
+                            <i class="bi bi-plus-lg me-1"></i> Add Meeting
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Title</th>
+                                        <th>Date</th>
+                                        <th>Conducted</th>
+                                        <th>Attended</th>
+                                        <th>Remarks</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="meetingsTableBody">
+                                    <!-- Populated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Modal -->
+    <div class="modal fade" id="meetingModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="meetingModalTitle">Add Meeting</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="meetingForm">
+                        <input type="hidden" id="mId">
+                        <div class="mb-3">
+                            <label class="form-label">Meeting Title</label>
+                            <input type="text" class="form-control" id="mTitle" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Date</label>
+                            <input type="date" class="form-control" id="mDate" required>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-6">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="mConducted">
+                                    <label class="form-check-label">Conducted</label>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="mAttended">
+                                    <label class="form-check-label">Attended</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Remarks</label>
+                            <textarea class="form-control" id="mRemarks" rows="2"></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">Save Meeting</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Modal -->
+    <div class="modal fade" id="notificationModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Notifications</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-0" id="notificationModalBody"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
