@@ -24,42 +24,115 @@
             </nav>
 
             <div class="container-fluid">
-                <div class="row">
-                    <div class="col-md-4">
-                        <div class="card shadow-sm mb-4">
+                <ul class="nav nav-tabs mb-4" id="adminTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="grading-tab" data-bs-toggle="tab" data-bs-target="#grading-panel" type="button" role="tab">Criteria Grading</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="module-tab" data-bs-toggle="tab" data-bs-target="#module-panel" type="button" role="tab">Module Evaluation</button>
+                    </li>
+                </ul>
+
+                <div class="tab-content" id="adminTabsContent">
+                    <!-- Criteria Grading Tab -->
+                    <div class="tab-pane fade show active" id="grading-panel" role="tabpanel">
+                        <div class="card shadow-sm">
                             <div class="card-header bg-white">
-                                <h5 class="mb-0">Select Teacher</h5>
+                                <div class="row align-items-center">
+                                    <div class="col-md-6">
+                                        <h5 class="mb-0">Grade Teachers (Criteria-based)</h5>
+                                    </div>
+                                    <div class="col-md-6 text-end">
+                                        <select id="gradingDeptFilter" class="form-select form-select-sm d-inline-block w-auto">
+                                            <option value="All">All Departments</option>
+                                            <option value="CS-A">CS-A</option>
+                                            <option value="CS-B">CS-B</option>
+                                            <option value="CS-C">CS-C</option>
+                                            <option value="CSE">CSE</option>
+                                            <option value="ECS">ECS</option>
+                                            <option value="MECH">MECH</option>
+                                        </select>
+                                    </div>
+                                </div>
                             </div>
                             <div class="card-body">
-                                <div class="mb-3">
-                                    <label class="form-label">Filter by Department</label>
-                                    <select id="deptFilter" class="form-select">
-                                        <option value="All">All Departments</option>
-                                        <option value="CS-A">CS-A</option>
-                                        <option value="CS-B">CS-B</option>
-                                        <option value="CS-C">CS-C</option>
-                                        <option value="CSE">CSE</option>
-                                        <option value="ECS">ECS</option>
-                                        <option value="MECH">MECH</option>
-                                    </select>
-                                </div>
-                                <div class="list-group" id="teacherList" style="max-height: 500px; overflow-y: auto;">
-                                    <!-- Teachers will be listed here -->
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <div class="list-group" id="gradingTeacherList" style="max-height: 500px; overflow-y: auto;">
+                                            <!-- Populated by JS -->
+                                        </div>
+                                    </div>
+                                    <div class="col-md-8">
+                                        <div id="gradingContainer" class="p-3 border rounded bg-light">
+                                            <div class="text-center text-muted mt-4 mb-4">
+                                                <i class="bi bi-person-lines-fill fs-1"></i>
+                                                <p class="mt-2">Select a teacher to start grading</p>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-8">
-                        <div class="card shadow-sm">
-                            <div class="card-header bg-white d-flex justify-content-between align-items-center">
-                                <h5 class="mb-0">Evaluation Details</h5>
-                                <button id="generateCertBtn" class="btn btn-success btn-sm" style="display: none;"><i class="bi bi-award me-2"></i>Generate Certificate</button>
+
+                    <!-- Module Evaluation Tab -->
+                    <div class="tab-pane fade" id="module-panel" role="tabpanel">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="card shadow-sm mb-4">
+                                    <div class="card-header bg-white">
+                                        <h5 class="mb-0">Select Teacher</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="mb-3">
+                                            <label class="form-label">Filter by Department</label>
+                                            <select id="deptFilter" class="form-select">
+                                                <option value="All">All Departments</option>
+                                                <option value="CS-A">CS-A</option>
+                                                <option value="CS-B">CS-B</option>
+                                                <option value="CS-C">CS-C</option>
+                                                <option value="CSE">CSE</option>
+                                                <option value="ECS">ECS</option>
+                                                <option value="MECH">MECH</option>
+                                            </select>
+                                        </div>
+                                        <div class="list-group" id="teacherList" style="max-height: 500px; overflow-y: auto;">
+                                            <!-- Teachers will be listed here -->
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="card-body" id="evaluationContainer">
-                                <div class="alert alert-info">Select a teacher from the list to begin evaluation.</div>
+                            <div class="col-md-8">
+                                <div class="card shadow-sm">
+                                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                                        <h5 class="mb-0">Evaluation Details</h5>
+                                        <button id="generateCertBtn" class="btn btn-success btn-sm" style="display: none;"><i class="bi bi-award me-2"></i>Generate Certificate</button>
+                                    </div>
+                                    <div class="card-body" id="evaluationContainer">
+                                        <div class="alert alert-info">Select a teacher from the list to begin evaluation.</div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Details Modal -->
+    <div class="modal fade" id="detailsModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="detailsModalTitle">Audit Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="detailsModalBody">
+                    <!-- Details will be loaded here -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                 </div>
             </div>
         </div>

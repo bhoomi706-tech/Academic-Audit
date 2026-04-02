@@ -86,9 +86,6 @@ const renderSidebar = (activePage) => {
             <li class="${activePage === 'admin-panel' ? 'active' : ''}">
                 <a href="admin-panel.html"><i class="bi bi-shield-lock"></i> Admin Panel</a>
             </li>
-            <li class="${activePage === 'admin-grading' ? 'active' : ''}">
-                <a href="admin-grading.html"><i class="bi bi-journal-check"></i> Admin Grading</a>
-            </li>
             ` : ''}
             ${user.role === 'HOD' || user.role === 'Admin' ? `
             <li class="${activePage === 'hod-view' ? 'active' : ''}">
@@ -843,7 +840,13 @@ const initAudit = () => {
         
         const data = getModuleData(moduleName);
         const fields = data.fields || {};
-        const files = data.files || {};
+        
+        // Parse files to extract names for the UI
+        const rawFiles = data.files || {};
+        const files = {};
+        for (const key in rawFiles) {
+            files[key] = typeof rawFiles[key] === 'string' ? rawFiles[key] : rawFiles[key].name;
+        }
         
         titleEl.innerText = moduleName;
         statusBadgeEl.innerText = data.lastUpdated ? 'Updated' : 'Pending';
@@ -1339,17 +1342,27 @@ const initAudit = () => {
     // File Upload Handler
     window.handleFileUpload = (input, fileKey) => {
         if (input.files && input.files[0]) {
-            const fileName = input.files[0].name;
-            const data = getModuleData(currentModule);
+            const file = input.files[0];
+            const reader = new FileReader();
             
-            if (!data.files) data.files = {};
-            data.files[fileKey] = fileName;
+            reader.onload = (e) => {
+                const data = getModuleData(currentModule);
+                if (!data.files) data.files = {};
+                
+                // Store object with name and base64 data
+                data.files[fileKey] = {
+                    name: file.name,
+                    data: e.target.result
+                };
+                
+                auditData[user.email][currentModule] = data;
+                setStorage(STORAGE_KEYS.AUDIT, auditData);
+                
+                // Update UI text immediately
+                input.nextElementSibling.innerText = `Current: ${file.name}`;
+            };
             
-            auditData[user.email][currentModule] = data;
-            setStorage(STORAGE_KEYS.AUDIT, auditData);
-            
-            // Update UI text immediately
-            input.nextElementSibling.innerText = `Current: ${fileName}`;
+            reader.readAsDataURL(file);
         }
     };
 
@@ -1554,7 +1567,7 @@ const initAdminPanel = () => {
                                 <thead class="table-dark">
                                     <tr>
                                         <th>Module</th>
-                                        <th>Files Uploaded</th>
+                                        <th>Actions</th>
                                         <th>Marks (Out of 5)</th>
                                         <th>Remarks</th>
                                     </tr>
@@ -1562,8 +1575,6 @@ const initAdminPanel = () => {
                                 <tbody>`;
 
         for (const [moduleName, mData] of Object.entries(tData)) {
-            const files = mData.files ? Object.values(mData.files).join(', ') : 'None';
-            
             const marks = mData.marks !== undefined ? mData.marks : '';
             const remarks = mData.remarks || '';
             
@@ -1578,7 +1589,11 @@ const initAdminPanel = () => {
             html += `
                 <tr class="${rowClass}">
                     <td>${moduleName}</td>
-                    <td><small>${files}</small></td>
+                    <td>
+                        <button type="button" class="btn btn-sm btn-info" onclick="viewModuleDetails('${moduleName}')">
+                            <i class="bi bi-eye"></i> View Details
+                        </button>
+                    </td>
                     <td>
                         <input type="number" class="form-control form-control-sm" name="marks_${moduleName}" value="${marks}" min="0" max="5" step="0.5" required>
                     </td>
@@ -1605,6 +1620,63 @@ const initAdminPanel = () => {
             </form>`;
 
         evaluationContainer.innerHTML = html;
+
+        window.viewModuleDetails = (moduleName) => {
+            const moduleData = auditData[currentTeacherEmail][moduleName];
+            let detailsHtml = '';
+            let hasAnyData = false;
+
+            if (moduleData && ((moduleData.files && Object.keys(moduleData.files).length > 0) || (moduleData.comments && moduleData.comments.length > 0))) {
+                hasAnyData = true;
+                
+                if (moduleData.files && Object.keys(moduleData.files).length > 0) {
+                    detailsHtml += `<div class="mb-2"><strong>Uploaded Files:</strong><ul class="list-group mt-1">`;
+                    for (const [key, fileObj] of Object.entries(moduleData.files)) {
+                        let fName = typeof fileObj === 'string' ? fileObj : fileObj.name;
+                        let fBase64 = typeof fileObj === 'string' ? null : fileObj.data;
+                        
+                        let viewBtn = fBase64 ? `<button class="btn btn-sm btn-outline-primary ms-2" onclick="openPdfViewer('${fBase64}')"><i class="bi bi-eye"></i> View</button>` : '';
+
+                        detailsHtml += `<li class="list-group-item d-flex justify-content-between align-items-center py-1 bg-light">
+                            <span class="small text-muted">${key}</span>
+                            <div>
+                                <span class="badge bg-secondary rounded-pill"><i class="bi bi-file-earmark-text me-1"></i>${fName}</span>
+                                ${viewBtn}
+                            </div>
+                        </li>`;
+                    }
+                    detailsHtml += `</ul></div>`;
+                }
+                
+                if (moduleData.comments && moduleData.comments.length > 0) {
+                    detailsHtml += `<div class="mb-3"><strong>Comments:</strong><div class="list-group mt-1">`;
+                    moduleData.comments.forEach(c => {
+                        const roleColor = c.role === 'Admin' ? 'text-danger' : 'text-primary';
+                        detailsHtml += `<div class="list-group-item py-1">
+                            <div class="d-flex w-100 justify-content-between">
+                                <small class="fw-bold ${roleColor}">${c.role}</small>
+                                <small style="font-size: 0.7rem;" class="text-muted">${formatDate(c.date)}</small>
+                            </div>
+                            <p class="mb-0 small">${c.text}</p>
+                        </div>`;
+                    });
+                    detailsHtml += `</div></div>`;
+                }
+            }
+
+            if (!hasAnyData) {
+                detailsHtml = `<div class="alert alert-info d-flex align-items-center">
+                    <i class="bi bi-info-circle-fill me-2"></i>
+                    <div>No specific files or comments uploaded by the teacher for <strong>"${moduleName}"</strong>.</div>
+                </div>`;
+            }
+
+            document.getElementById('detailsModalTitle').innerText = `Details: ${moduleName}`;
+            document.getElementById('detailsModalBody').innerHTML = detailsHtml;
+            
+            const modal = new bootstrap.Modal(document.getElementById('detailsModal'));
+            modal.show();
+        };
 
         if (isFullyEvaluated) {
             generateCertBtn.style.display = 'inline-block';
@@ -1809,6 +1881,10 @@ const initAdminGrading = () => {
     window.loadTeacherGrading = (email) => {
         const tUser = allUsers.find(u => u.email === email);
         const tData = gradingData[email] || { marks: {} };
+        
+        // Initialize viewed criteria tracking for this session
+        const viewedCriteriaKey = `cad_viewed_${email}`;
+        let viewedCriteria = getStorage(viewedCriteriaKey, {});
 
         let html = `<h5>Grading: ${tUser.name} (${tUser.department})</h5>
                     <form id="gradingForm">
@@ -1817,6 +1893,7 @@ const initAdminGrading = () => {
                                 <thead class="table-dark">
                                     <tr>
                                         <th>Criteria</th>
+                                        <th>Actions</th>
                                         <th>Marks (0-5)</th>
                                     </tr>
                                 </thead>
@@ -1824,11 +1901,21 @@ const initAdminGrading = () => {
 
         criteriaList.forEach(criteria => {
             const mark = tData.marks[criteria] !== undefined ? tData.marks[criteria] : '';
+            const isViewed = viewedCriteria[criteria] === true;
+            const rowClass = isViewed ? 'viewed' : '';
+            const disabledAttr = isViewed ? '' : 'disabled';
+            
             html += `
-                <tr>
+                <tr id="row-${criteria.replace(/\s+/g, '-')}" class="${rowClass}">
                     <td>${criteria}</td>
                     <td>
-                        <input type="number" class="form-control form-control-sm grading-input" name="mark_${criteria}" value="${mark}" min="0" max="5" step="0.5" required>
+                        <button type="button" class="btn btn-sm btn-info text-white" onclick="viewDetails('${criteria}', '${email}')">
+                            <i class="bi bi-eye"></i> View Details
+                        </button>
+                    </td>
+                    <td>
+                        <input type="number" id="marks-${criteria.replace(/\s+/g, '-')}" class="form-control form-control-sm grading-input" name="mark_${criteria}" value="${mark}" min="0" max="5" step="0.5" required ${disabledAttr}>
+                        <div id="warning-${criteria.replace(/\s+/g, '-')}" class="text-danger small mt-1" style="display: none;">Low Score Warning</div>
                     </td>
                 </tr>
             `;
@@ -1858,11 +1945,128 @@ const initAdminGrading = () => {
 
         gradingContainer.innerHTML = html;
 
+        window.viewDetails = (criteria, teacherEmail) => {
+            let auditData = getStorage(STORAGE_KEYS.AUDIT, {});
+            let tAudit = auditData[teacherEmail] || {};
+            
+            // Map grading criteria to teacher audit modules for intelligent linking
+            const criteriaToModules = {
+                'Outcome-Based Curriculum': ['DQAC Module', 'CO-PO Module', 'Vision & Mission', 'GAP in Curriculum'],
+                'Teaching Learning': ['Guest Lecture & Industrial Visits', 'Weak & Bright Students'],
+                'Assessment': ['Project Evaluation', 'Mini Project & VAP'],
+                'Students Performance': ['Internship', 'Placement', 'Student Achievements'],
+                'Faculty Info': ['Faculty Publications', 'Research & Consultancy'],
+                'Contributions': ['MoU'],
+                'Facilities': ['Lab Maintenance'],
+                'Improvement': ['Program Exit Survey'],
+                'Governance': ['Admission Details', 'Budget Utilization']
+            };
+            
+            const relatedModules = criteriaToModules[criteria] || [criteria]; // Fallback to criteria name if not mapped
+            
+            let detailsHtml = '';
+            let hasAnyData = false;
+            
+            relatedModules.forEach(modName => {
+                let moduleData = tAudit[modName];
+                if (moduleData && ((moduleData.files && Object.keys(moduleData.files).length > 0) || (moduleData.comments && moduleData.comments.length > 0))) {
+                    hasAnyData = true;
+                    detailsHtml += `<h6 class="mt-3 text-primary border-bottom pb-1"><i class="bi bi-folder2-open me-2"></i>${modName}</h6>`;
+                    
+                    if (moduleData.files && Object.keys(moduleData.files).length > 0) {
+                        detailsHtml += `<div class="mb-2"><strong>Uploaded Files:</strong><ul class="list-group mt-1">`;
+                        for (const [key, fileObj] of Object.entries(moduleData.files)) {
+                            let fName = typeof fileObj === 'string' ? fileObj : fileObj.name;
+                            let fBase64 = typeof fileObj === 'string' ? null : fileObj.data;
+                            
+                            let viewBtn = fBase64 ? `<button class="btn btn-sm btn-outline-primary ms-2" onclick="openPdfViewer('${fBase64}')"><i class="bi bi-eye"></i> View</button>` : '';
+
+                            detailsHtml += `<li class="list-group-item d-flex justify-content-between align-items-center py-1 bg-light">
+                                <span class="small text-muted">${key}</span>
+                                <div>
+                                    <span class="badge bg-secondary rounded-pill"><i class="bi bi-file-earmark-text me-1"></i>${fName}</span>
+                                    ${viewBtn}
+                                </div>
+                            </li>`;
+                        }
+                        detailsHtml += `</ul></div>`;
+                    }
+                    
+                    if (moduleData.comments && moduleData.comments.length > 0) {
+                        detailsHtml += `<div class="mb-3"><strong>Comments:</strong><div class="list-group mt-1">`;
+                        moduleData.comments.forEach(c => {
+                            const roleColor = c.role === 'Admin' ? 'text-danger' : 'text-primary';
+                            detailsHtml += `<div class="list-group-item py-1">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <small class="fw-bold ${roleColor}">${c.role}</small>
+                                    <small style="font-size: 0.7rem;" class="text-muted">${formatDate(c.date)}</small>
+                                </div>
+                                <p class="mb-0 small">${c.text}</p>
+                            </div>`;
+                        });
+                        detailsHtml += `</div></div>`;
+                    }
+                }
+            });
+
+            if (!hasAnyData) {
+                detailsHtml = `<div class="alert alert-info d-flex align-items-center">
+                    <i class="bi bi-info-circle-fill me-2"></i>
+                    <div>No specific files or comments uploaded by the teacher for modules related to <strong>"${criteria}"</strong>.</div>
+                </div>`;
+                
+                // Show a hint of what modules are expected
+                if (criteriaToModules[criteria]) {
+                    detailsHtml += `<p class="text-muted small mt-2">Expected modules for this criteria: ${criteriaToModules[criteria].join(', ')}</p>`;
+                }
+            }
+
+            document.getElementById('detailsModalTitle').innerText = `Details: ${criteria}`;
+            document.getElementById('detailsModalBody').innerHTML = detailsHtml;
+            
+            const modal = new bootstrap.Modal(document.getElementById('detailsModal'));
+            modal.show();
+
+            // Mark as viewed and enable marks
+            viewedCriteria[criteria] = true;
+            setStorage(viewedCriteriaKey, viewedCriteria);
+            
+            const safeId = criteria.replace(/\s+/g, '-');
+            document.getElementById(`row-${safeId}`).classList.add('viewed');
+            document.getElementById(`marks-${safeId}`).disabled = false;
+        };
+
+        window.openPdfViewer = (base64Data) => {
+            const win = window.open();
+            if (win) {
+                win.document.write(`<iframe src="${base64Data}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%; position:absolute;" allowfullscreen></iframe>`);
+                win.document.title = "PDF Viewer";
+            } else {
+                alert("Please allow popups to view the PDF.");
+            }
+        };
+
         const updateSummary = () => {
             const inputs = document.querySelectorAll('.grading-input');
             let total = 0;
             inputs.forEach(input => {
-                total += Number(input.value) || 0;
+                const val = Number(input.value) || 0;
+                total += val;
+                
+                // Low score warning
+                const safeId = input.id.replace('marks-', '');
+                const warningEl = document.getElementById(`warning-${safeId}`);
+                if (input.value !== '' && val < 2) {
+                    input.classList.add('is-invalid');
+                    input.classList.add('bg-danger');
+                    input.classList.add('text-white');
+                    if (warningEl) warningEl.style.display = 'block';
+                } else {
+                    input.classList.remove('is-invalid');
+                    input.classList.remove('bg-danger');
+                    input.classList.remove('text-white');
+                    if (warningEl) warningEl.style.display = 'none';
+                }
             });
             const pct = ((total / 45) * 100).toFixed(2);
             document.getElementById('totalGradingScore').innerText = total;
@@ -1882,6 +2086,14 @@ const initAdminGrading = () => {
 
         document.getElementById('gradingForm').addEventListener('submit', (e) => {
             e.preventDefault();
+            
+            // Validation: Check if all criteria are viewed
+            const unviewed = criteriaList.filter(c => !viewedCriteria[c]);
+            if (unviewed.length > 0) {
+                alert("Please view all details before grading. Unviewed criteria: " + unviewed.join(', '));
+                return; // Stop submission
+            }
+
             const formData = new FormData(e.target);
             
             const marks = {};
@@ -1918,27 +2130,59 @@ const initAdminGrading = () => {
 
 const initializeSampleData = () => {
     let users = getStorage(STORAGE_KEYS.USERS, []);
-    const sampleEmail = 'jane.doe@college.edu';
+    const sampleEmail1 = 'jane.doe@college.edu';
+    const sampleEmail2 = 'john.smith@college.edu';
     
-    if (!users.find(u => u.email === sampleEmail)) {
+    // A valid PDF base64 string for demonstration that contains "This is a sample PDF document."
+    const dummyPdf = "data:application/pdf;base64,JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5kb2JqCjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9LaWRzIFszIDAgUl0gL0NvdW50IDEgPj4KZW5kb2JqCjMgMCBvYmoKPDwgL1R5cGUgL1BhZ2UgL1BhcmVudCAyIDAgUiAvTWVkaWFCb3ggWzAgMCA2MTIgNzkyXSAvQ29udGVudHMgNCAwIFIgL1Jlc291cmNlcyA8PCAvRm9udCA8PCAvRjEgNSAwIFIgPj4gPj4gPj4KZW5kb2JqCjQgMCBvYmoKPDwgL0xlbmd0aCA1MyA+PgpzdHJlYW0KQlQKL0YxIDI0IFRmCjEwMCA3MDAgVGQKKFRoaXMgaXMgYSBzYW1wbGUgUERGIGRvY3VtZW50LikgVGoKRVQKZW5kc3RyZWFtCmVuZG9iago1IDAgb2JqCjw8IC9UeXBlIC9Gb250IC9TdWJ0eXBlIC9UeXBlMSAvQmFzZUZvbnQgL0hlbHZldGljYSA+PgplbmRvYmoKeHJlZgowIDYKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDA5IDAwMDAwIG4gCjAwMDAwMDAwNTggMDAwMDAgbiAKMDAwMDAwMDExNSAwMDAwMCBuIAowMDAwMDAwMjI5IDAwMDAwIG4gCjAwMDAwMDAzMzMgMDAwMDAgbiAKdHJhaWxlcgo8PCAvU2l6ZSA2IC9Sb290IDEgMCBSID4+CnN0YXJ0eHJlZgo0MjEKJSVFT0Y=";
+    const oldDummyPdf = "data:application/pdf;base64,JVBERi0xLjAKMSAwIG9iago8PC9UeXBlL0NhdGFsb2cvUGFnZXMgMiAwIFI+PgplbmRvYmoKMiAwIG9iago8PC9UeXBlL01hcGFnZXMvS2lkc1szIDAgUl0vQ291bnQgMT4+CmVuZG9iagozIDAgb2JqCjw8L1R5cGUvUGFnZS9NZWRpYUJveFswIDAgMyAzXT4+CmVuZG9iagp0cmFpbGVyCjw8L1Jvb3QgMSAwIFI+PgolJUVPRgo=";
+    
+    let usersChanged = false;
+    let auditData = getStorage(STORAGE_KEYS.AUDIT, {});
+    let auditDataChanged = false;
+
+    // Force update old dummy PDFs
+    for (const email of [sampleEmail1, sampleEmail2]) {
+        if (auditData[email]) {
+            for (const mod in auditData[email]) {
+                if (auditData[email][mod].files && auditData[email][mod].files.file1) {
+                    if (typeof auditData[email][mod].files.file1 === 'string') {
+                        auditData[email][mod].files.file1 = {
+                            name: auditData[email][mod].files.file1,
+                            data: dummyPdf
+                        };
+                        auditDataChanged = true;
+                    } else if (auditData[email][mod].files.file1.data === oldDummyPdf) {
+                        auditData[email][mod].files.file1.data = dummyPdf;
+                        auditDataChanged = true;
+                    }
+                }
+            }
+        }
+    }
+    if (auditDataChanged) {
+        setStorage(STORAGE_KEYS.AUDIT, auditData);
+    }
+
+    if (!users.find(u => u.email === sampleEmail1)) {
         users.push({
             name: 'Dr. Jane Doe',
-            email: sampleEmail,
+            email: sampleEmail1,
             role: 'Teacher',
             department: 'CSE'
         });
-        setStorage(STORAGE_KEYS.USERS, users);
+        usersChanged = true;
         
         let auditData = getStorage(STORAGE_KEYS.AUDIT, {});
-        auditData[sampleEmail] = {};
+        auditData[sampleEmail1] = {};
         
         // Add some sample modules
         const sampleModules = ['DQAC Module', 'Program Exit Survey', 'CO-PO Module', 'Project Evaluation', 'Guest Lecture & Industrial Visits'];
         
         sampleModules.forEach(mod => {
-            auditData[sampleEmail][mod] = {
+            auditData[sampleEmail1][mod] = {
                 files: {
-                    file1: `${mod.replace(/ /g, '_').toLowerCase()}_report.pdf`
+                    file1: { name: `${mod.replace(/ /g, '_').toLowerCase()}_report.pdf`, data: dummyPdf }
                 },
                 comments: [],
                 marks: '',
@@ -1948,6 +2192,52 @@ const initializeSampleData = () => {
         });
         
         setStorage(STORAGE_KEYS.AUDIT, auditData);
+    }
+
+    if (!users.find(u => u.email === sampleEmail2)) {
+        users.push({
+            name: 'Prof. John Smith',
+            email: sampleEmail2,
+            role: 'Teacher',
+            department: 'MECH'
+        });
+        usersChanged = true;
+        
+        let auditData = getStorage(STORAGE_KEYS.AUDIT, {});
+        auditData[sampleEmail2] = {};
+        
+        // John Smith has some completed, some pending
+        const allModules = ['DQAC Module', 'Program Exit Survey', 'CO-PO Module', 'Project Evaluation', 'Guest Lecture & Industrial Visits'];
+        const completedModules = ['DQAC Module', 'CO-PO Module'];
+        
+        allModules.forEach(mod => {
+            if (completedModules.includes(mod)) {
+                auditData[sampleEmail2][mod] = {
+                    files: {
+                        file1: { name: `${mod.replace(/ /g, '_').toLowerCase()}_evidence.pdf`, data: dummyPdf }
+                    },
+                    comments: [{ role: 'Teacher', text: 'Uploaded the required documents for this module.', date: new Date().toISOString() }],
+                    marks: '',
+                    remarks: '',
+                    lastUpdated: new Date().toISOString()
+                };
+            } else {
+                // Pending module
+                auditData[sampleEmail2][mod] = {
+                    files: {},
+                    comments: [{ role: 'Admin', text: 'Please upload the pending documents for this module.', date: new Date().toISOString() }],
+                    marks: '',
+                    remarks: '',
+                    lastUpdated: null
+                };
+            }
+        });
+        
+        setStorage(STORAGE_KEYS.AUDIT, auditData);
+    }
+
+    if (usersChanged) {
+        setStorage(STORAGE_KEYS.USERS, users);
     }
 };
 
@@ -1975,7 +2265,9 @@ document.addEventListener('DOMContentLoaded', () => {
     else if (page === 'analysis.html') initAnalysis();
     else if (page === 'audit.html') initAudit();
     else if (page === 'scheduler.html') initScheduler();
-    else if (page === 'admin-panel.html') initAdminPanel();
+    else if (page === 'admin-panel.html') {
+        initAdminPanel();
+        initAdminGrading();
+    }
     else if (page === 'hod-view.html') initHodView();
-    else if (page === 'admin-grading.html') initAdminGrading();
 });

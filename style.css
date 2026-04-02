@@ -294,6 +294,10 @@ body {
 .bg-performance-orange { background-color: #fd7e14; } /* Orange */
 .bg-performance-green { background-color: var(--success-color); }
 
+.viewed {
+    background-color: #e6f7ff !important;
+}
+
 /* Custom Danger Highlight for Tables */
 .bg-danger-custom {
     background-color: var(--danger-color) !important;
