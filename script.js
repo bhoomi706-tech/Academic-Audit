@@ -6,6 +6,7 @@
 // --- Constants ---
 const STORAGE_KEYS = {
     USER: 'cad_user',
+    USERS: 'cad_users',
     MEETINGS: 'cad_meetings',
     SYLLABUS: 'cad_syllabus',
     ATTENDANCE: 'cad_attendance',
@@ -20,7 +21,7 @@ const DEPARTMENTS = ['CS-A', 'CS-B', 'CS-C', 'CSE', 'ECS', 'MECH'];
 const AUDIT_MODULES = [
     'DQAC Module', 'Program Exit Survey', 'CO-PO Module', 'Project Evaluation',
     'Guest Lecture & Industrial Visits', 'Weak & Bright Students', 'GAP in Curriculum',
-    'Mini Project & VAP', 'Internship', 'Placement', 'MoU', 'Budget',
+    'Mini Project & VAP', 'Internship', 'Placement', 'MoU', 'Budget Utilization',
     'Faculty Publications', 'Research & Consultancy', 'Lab Maintenance',
     'Admission Details', 'Student Achievements', 'SDG Initiatives', 'Vision & Mission'
 ];
@@ -81,6 +82,27 @@ const renderSidebar = (activePage) => {
             <li class="${activePage === 'dashboard' ? 'active' : ''}">
                 <a href="dashboard.html"><i class="bi bi-speedometer2"></i> Dashboard</a>
             </li>
+            ${user.role === 'Admin' ? `
+            <li class="${activePage === 'admin-panel' ? 'active' : ''}">
+                <a href="admin-panel.html"><i class="bi bi-shield-lock"></i> Admin Panel</a>
+            </li>
+            <li class="${activePage === 'admin-grading' ? 'active' : ''}">
+                <a href="admin-grading.html"><i class="bi bi-journal-check"></i> Admin Grading</a>
+            </li>
+            ` : ''}
+            ${user.role === 'HOD' || user.role === 'Admin' ? `
+            <li class="${activePage === 'hod-view' ? 'active' : ''}">
+                <a href="hod-view.html"><i class="bi bi-building"></i> Department View</a>
+            </li>
+            ` : ''}
+            ${user.role === 'Teacher' ? `
+            <li class="${activePage === 'audit' ? 'active' : ''}">
+                <a href="audit.html"><i class="bi bi-clipboard-check"></i> Academic Audit</a>
+            </li>
+            <li class="${activePage === 'certificate' ? 'active' : ''}">
+                <a href="certificate.html"><i class="bi bi-award"></i> My Certificate</a>
+            </li>
+            ` : ''}
             <li class="${activePage === 'meetings' ? 'active' : ''}">
                 <a href="meetings.html"><i class="bi bi-calendar-event"></i> Meetings</a>
             </li>
@@ -92,9 +114,6 @@ const renderSidebar = (activePage) => {
             </li>
             <li class="${activePage === 'analysis' ? 'active' : ''}">
                 <a href="analysis.html"><i class="bi bi-graph-up"></i> Analysis</a>
-            </li>
-            <li class="${activePage === 'audit' ? 'active' : ''}">
-                <a href="audit.html"><i class="bi bi-clipboard-check"></i> Academic Audit</a>
             </li>
             <li class="${activePage === 'scheduler' ? 'active' : ''}">
                 <a href="scheduler.html"><i class="bi bi-clock"></i> Scheduler</a>
@@ -200,28 +219,44 @@ const checkSystemNotifications = () => {
 
 // --- Page Initialization ---
 
-// 1. Login
-const initLogin = () => {
-    const form = document.getElementById('loginForm');
-    if (!form) return;
+    // 1. Login
+    const initLogin = () => {
+        const form = document.getElementById('loginForm');
+        if (!form) return;
 
-    form.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const email = document.getElementById('email').value;
-        const role = document.getElementById('role').value;
-        const department = document.getElementById('department').value;
-        
-        const user = {
-            name: email.split('@')[0],
-            email,
-            role,
-            department
-        };
-        
-        setStorage(STORAGE_KEYS.USER, user);
-        window.location.href = 'dashboard.html';
-    });
-};
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const role = document.getElementById('role').value;
+            const department = document.getElementById('department').value;
+            
+            const user = {
+                name: email.split('@')[0],
+                email,
+                role,
+                department
+            };
+            
+            let users = getStorage(STORAGE_KEYS.USERS, []);
+            const existingUserIndex = users.findIndex(u => u.email === email);
+            if (existingUserIndex >= 0) {
+                users[existingUserIndex] = user;
+            } else {
+                users.push(user);
+            }
+            setStorage(STORAGE_KEYS.USERS, users);
+
+            setStorage(STORAGE_KEYS.USER, user);
+            
+            if (role === 'Admin') {
+                window.location.href = 'admin-panel.html';
+            } else if (role === 'HOD') {
+                window.location.href = 'hod-view.html';
+            } else {
+                window.location.href = 'dashboard.html';
+            }
+        });
+    };
 
 // 2. Dashboard
 const initDashboard = () => {
@@ -274,13 +309,30 @@ const initDashboard = () => {
         }
     });
 
+    const evalData = getStorage(STORAGE_KEYS.AUDIT, {});
+    const teacherEval = evalData[user.email] || {};
+    let auditScore = 0;
+    let evalCount = 0;
+    AUDIT_MODULES.forEach(mod => {
+        if (teacherEval[mod] && teacherEval[mod].marks !== undefined) {
+            auditScore += Number(teacherEval[mod].marks);
+            evalCount++;
+        }
+    });
+    let auditPct = evalCount > 0 ? Math.round((auditScore / (evalCount * 5)) * 100) : 0;
+
+    let researchPct = 0;
+    if (teacherEval['Research & Consultancy'] && teacherEval['Research & Consultancy'].marks !== undefined) {
+        researchPct = (Number(teacherEval['Research & Consultancy'].marks) / 5) * 100;
+    }
+
     new Chart(document.getElementById('radarChart'), {
         type: 'radar',
         data: {
             labels: ['Syllabus', 'Attendance', 'Meetings', 'Audit', 'Research'],
             datasets: [{
                 label: 'Performance',
-                data: [syllabusPct, attendancePct, meetingScore, 75, 60], // Dummy data for Audit/Research for now
+                data: [syllabusPct, attendancePct, meetingScore, auditPct, researchPct],
                 backgroundColor: 'rgba(13, 110, 253, 0.2)',
                 borderColor: '#0d6efd',
                 pointBackgroundColor: '#0d6efd'
@@ -300,10 +352,10 @@ const initMeetings = () => {
     let meetings = getStorage(STORAGE_KEYS.MEETINGS, []);
     const tableBody = document.getElementById('meetingsTableBody');
     const form = document.getElementById('meetingForm');
-    const modal = new bootstrap.Modal(document.getElementById('meetingModal'));
+    const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('meetingModal'));
 
     const render = () => {
-        const deptMeetings = meetings.filter(m => m.department === user.department);
+        const deptMeetings = user.role === 'Admin' ? meetings : meetings.filter(m => m.department === user.department);
         tableBody.innerHTML = deptMeetings.map(m => `
             <tr>
                 <td>${m.title}</td>
@@ -312,14 +364,17 @@ const initMeetings = () => {
                 <td><span class="badge bg-${m.attended ? 'success' : 'danger'}">${m.attended ? 'Yes' : 'No'}</span></td>
                 <td>${m.remarks || '-'}</td>
                 <td>
+                    ${user.role !== 'HOD' ? `
                     <button class="btn btn-sm btn-outline-primary" onclick="editMeeting('${m.id}')"><i class="bi bi-pencil"></i></button>
                     <button class="btn btn-sm btn-outline-danger" onclick="deleteMeeting('${m.id}')"><i class="bi bi-trash"></i></button>
+                    ` : ''}
                 </td>
             </tr>
         `).join('');
     };
 
     window.editMeeting = (id) => {
+        if (user.role === 'HOD') return;
         const m = meetings.find(x => x.id === id);
         if (!m) return;
         document.getElementById('mId').value = m.id;
@@ -333,6 +388,7 @@ const initMeetings = () => {
     };
 
     window.deleteMeeting = (id) => {
+        if (user.role === 'HOD') return;
         if (confirm('Delete this meeting?')) {
             meetings = meetings.filter(m => m.id !== id);
             setStorage(STORAGE_KEYS.MEETINGS, meetings);
@@ -340,45 +396,48 @@ const initMeetings = () => {
         }
     };
 
-    form.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const id = document.getElementById('mId').value;
-        const data = {
-            id: id || generateId(),
-            department: user.department,
-            title: document.getElementById('mTitle').value,
-            date: document.getElementById('mDate').value,
-            conducted: document.getElementById('mConducted').checked,
-            attended: document.getElementById('mAttended').checked,
-            remarks: document.getElementById('mRemarks').value
-        };
+    if (form) {
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            if (user.role === 'HOD') return;
+            const id = document.getElementById('mId').value;
+            const data = {
+                id: id || generateId(),
+                department: user.department,
+                title: document.getElementById('mTitle').value,
+                date: document.getElementById('mDate').value,
+                conducted: document.getElementById('mConducted').checked,
+                attended: document.getElementById('mAttended').checked,
+                remarks: document.getElementById('mRemarks').value
+            };
 
-        if (id) {
-            const idx = meetings.findIndex(x => x.id === id);
-            if (idx !== -1) meetings[idx] = data;
-        } else {
-            meetings.push(data);
-            // Add notification for new meeting
-            const notifs = getStorage(STORAGE_KEYS.NOTIFICATIONS, []);
-            notifs.unshift({
-                id: generateId(),
-                message: `New meeting added: ${data.title}`,
-                date: new Date().toISOString(),
-                read: false
-            });
-            setStorage(STORAGE_KEYS.NOTIFICATIONS, notifs);
-        }
+            if (id) {
+                const idx = meetings.findIndex(x => x.id === id);
+                if (idx !== -1) meetings[idx] = data;
+            } else {
+                meetings.push(data);
+                // Add notification for new meeting
+                const notifs = getStorage(STORAGE_KEYS.NOTIFICATIONS, []);
+                notifs.unshift({
+                    id: generateId(),
+                    message: `New meeting added: ${data.title}`,
+                    date: new Date().toISOString(),
+                    read: false
+                });
+                setStorage(STORAGE_KEYS.NOTIFICATIONS, notifs);
+            }
 
-        setStorage(STORAGE_KEYS.MEETINGS, meetings);
-        modal.hide();
-        form.reset();
-        document.getElementById('mId').value = '';
-        document.getElementById('meetingModalTitle').innerText = 'Add Meeting';
-        render();
-    });
+            setStorage(STORAGE_KEYS.MEETINGS, meetings);
+            modal.hide();
+            form.reset();
+            document.getElementById('mId').value = '';
+            document.getElementById('meetingModalTitle').innerText = 'Add Meeting';
+            render();
+        });
+    }
 
-    document.getElementById('meetingModal').addEventListener('hidden.bs.modal', () => {
-        form.reset();
+    document.getElementById('meetingModal')?.addEventListener('hidden.bs.modal', () => {
+        if(form) form.reset();
         document.getElementById('mId').value = '';
         document.getElementById('meetingModalTitle').innerText = 'Add Meeting';
     });
@@ -392,10 +451,10 @@ const initSyllabus = () => {
     let syllabus = getStorage(STORAGE_KEYS.SYLLABUS, []);
     const listContainer = document.getElementById('syllabusList');
     const form = document.getElementById('syllabusForm');
-    const modal = new bootstrap.Modal(document.getElementById('syllabusModal'));
+    const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('syllabusModal'));
 
     const render = () => {
-        const deptSyllabus = syllabus.filter(s => s.department === user.department);
+        const deptSyllabus = user.role === 'Admin' ? syllabus : syllabus.filter(s => s.department === user.department);
         listContainer.innerHTML = deptSyllabus.map(s => {
             const pct = s.total ? Math.round((s.completed / s.total) * 100) : 0;
             return `
@@ -404,8 +463,10 @@ const initSyllabus = () => {
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <h5 class="card-title mb-0">${s.subject}</h5>
                         <div>
+                            ${user.role !== 'HOD' ? `
                             <button class="btn btn-sm btn-outline-primary me-1" onclick="editSyllabus('${s.id}')"><i class="bi bi-pencil"></i></button>
                             <button class="btn btn-sm btn-outline-danger" onclick="deleteSyllabus('${s.id}')"><i class="bi bi-trash"></i></button>
+                            ` : ''}
                         </div>
                     </div>
                     <div class="row align-items-center">
@@ -426,6 +487,7 @@ const initSyllabus = () => {
     };
 
     window.editSyllabus = (id) => {
+        if (user.role === 'HOD') return;
         const s = syllabus.find(x => x.id === id);
         if (!s) return;
         document.getElementById('sId').value = s.id;
@@ -437,6 +499,7 @@ const initSyllabus = () => {
     };
 
     window.deleteSyllabus = (id) => {
+        if (user.role === 'HOD') return;
         if (confirm('Delete this subject?')) {
             syllabus = syllabus.filter(s => s.id !== id);
             setStorage(STORAGE_KEYS.SYLLABUS, syllabus);
@@ -444,33 +507,36 @@ const initSyllabus = () => {
         }
     };
 
-    form.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const id = document.getElementById('sId').value;
-        const data = {
-            id: id || generateId(),
-            department: user.department,
-            subject: document.getElementById('sSubject').value,
-            total: Number(document.getElementById('sTotal').value),
-            completed: Number(document.getElementById('sCompleted').value)
-        };
+    if (form) {
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            if (user.role === 'HOD') return;
+            const id = document.getElementById('sId').value;
+            const data = {
+                id: id || generateId(),
+                department: user.department,
+                subject: document.getElementById('sSubject').value,
+                total: Number(document.getElementById('sTotal').value),
+                completed: Number(document.getElementById('sCompleted').value)
+            };
 
-        if (id) {
-            const idx = syllabus.findIndex(x => x.id === id);
-            if (idx !== -1) syllabus[idx] = data;
-        } else {
-            syllabus.push(data);
-        }
+            if (id) {
+                const idx = syllabus.findIndex(x => x.id === id);
+                if (idx !== -1) syllabus[idx] = data;
+            } else {
+                syllabus.push(data);
+            }
 
-        setStorage(STORAGE_KEYS.SYLLABUS, syllabus);
-        modal.hide();
-        form.reset();
-        document.getElementById('sId').value = '';
-        render();
-    });
+            setStorage(STORAGE_KEYS.SYLLABUS, syllabus);
+            modal.hide();
+            form.reset();
+            document.getElementById('sId').value = '';
+            render();
+        });
+    }
 
-    document.getElementById('syllabusModal').addEventListener('hidden.bs.modal', () => {
-        form.reset();
+    document.getElementById('syllabusModal')?.addEventListener('hidden.bs.modal', () => {
+        if(form) form.reset();
         document.getElementById('sId').value = '';
         document.getElementById('syllabusModalTitle').innerText = 'Add Subject';
     });
@@ -484,10 +550,10 @@ const initAttendance = () => {
     let attendance = getStorage(STORAGE_KEYS.ATTENDANCE, []);
     const tableBody = document.getElementById('attendanceTableBody');
     const form = document.getElementById('attendanceForm');
-    const modal = new bootstrap.Modal(document.getElementById('attendanceModal'));
+    const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('attendanceModal'));
 
     const render = () => {
-        const deptAttendance = attendance.filter(a => a.department === user.department);
+        const deptAttendance = user.role === 'Admin' ? attendance : attendance.filter(a => a.department === user.department);
         tableBody.innerHTML = deptAttendance.map(a => {
             const pct = a.total ? Math.round((a.taken / a.total) * 100) : 0;
             return `
@@ -499,14 +565,17 @@ const initAttendance = () => {
                     <span class="badge bg-${pct < 75 ? 'danger' : 'success'}">${pct}%</span>
                 </td>
                 <td>
+                    ${user.role !== 'HOD' ? `
                     <button class="btn btn-sm btn-outline-primary" onclick="editAttendance('${a.id}')"><i class="bi bi-pencil"></i></button>
                     <button class="btn btn-sm btn-outline-danger" onclick="deleteAttendance('${a.id}')"><i class="bi bi-trash"></i></button>
+                    ` : ''}
                 </td>
             </tr>`;
         }).join('');
     };
 
     window.editAttendance = (id) => {
+        if (user.role === 'HOD') return;
         const a = attendance.find(x => x.id === id);
         if (!a) return;
         document.getElementById('aId').value = a.id;
@@ -518,6 +587,7 @@ const initAttendance = () => {
     };
 
     window.deleteAttendance = (id) => {
+        if (user.role === 'HOD') return;
         if (confirm('Delete?')) {
             attendance = attendance.filter(a => a.id !== id);
             setStorage(STORAGE_KEYS.ATTENDANCE, attendance);
@@ -525,33 +595,36 @@ const initAttendance = () => {
         }
     };
 
-    form.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const id = document.getElementById('aId').value;
-        const data = {
-            id: id || generateId(),
-            department: user.department,
-            subject: document.getElementById('aSubject').value,
-            total: Number(document.getElementById('aTotal').value),
-            taken: Number(document.getElementById('aTaken').value)
-        };
+    if (form) {
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            if (user.role === 'HOD') return;
+            const id = document.getElementById('aId').value;
+            const data = {
+                id: id || generateId(),
+                department: user.department,
+                subject: document.getElementById('aSubject').value,
+                total: Number(document.getElementById('aTotal').value),
+                taken: Number(document.getElementById('aTaken').value)
+            };
 
-        if (id) {
-            const idx = attendance.findIndex(x => x.id === id);
-            if (idx !== -1) attendance[idx] = data;
-        } else {
-            attendance.push(data);
-        }
+            if (id) {
+                const idx = attendance.findIndex(x => x.id === id);
+                if (idx !== -1) attendance[idx] = data;
+            } else {
+                attendance.push(data);
+            }
 
-        setStorage(STORAGE_KEYS.ATTENDANCE, attendance);
-        modal.hide();
-        form.reset();
-        document.getElementById('aId').value = '';
-        render();
-    });
+            setStorage(STORAGE_KEYS.ATTENDANCE, attendance);
+            modal.hide();
+            form.reset();
+            document.getElementById('aId').value = '';
+            render();
+        });
+    }
 
-    document.getElementById('attendanceModal').addEventListener('hidden.bs.modal', () => {
-        form.reset();
+    document.getElementById('attendanceModal')?.addEventListener('hidden.bs.modal', () => {
+        if(form) form.reset();
         document.getElementById('aId').value = '';
         document.getElementById('attendanceModalTitle').innerText = 'Add Attendance';
     });
@@ -562,10 +635,10 @@ const initAttendance = () => {
 // 6. Analysis
 const initAnalysis = () => {
     const user = getCurrentUser();
-    const meetings = getStorage(STORAGE_KEYS.MEETINGS, []).filter(m => m.department === user.department);
-    const syllabus = getStorage(STORAGE_KEYS.SYLLABUS, []).filter(s => s.department === user.department);
-    const attendance = getStorage(STORAGE_KEYS.ATTENDANCE, []).filter(a => a.department === user.department);
-    let comments = getStorage(STORAGE_KEYS.COMMENTS, []);
+    const meetings = getStorage(STORAGE_KEYS.MEETINGS, []).filter(m => user.role === 'Admin' ? true : m.department === user.department);
+    const syllabus = getStorage(STORAGE_KEYS.SYLLABUS, []).filter(s => user.role === 'Admin' ? true : s.department === user.department);
+    const attendance = getStorage(STORAGE_KEYS.ATTENDANCE, []).filter(a => user.role === 'Admin' ? true : a.department === user.department);
+    let comments = getStorage(STORAGE_KEYS.COMMENTS, []).filter(c => user.role === 'Admin' ? true : c.department === user.department);
 
     // Stats
     const totalMeetings = meetings.length;
@@ -595,14 +668,31 @@ const initAnalysis = () => {
     perfEl.innerText = overall + '%';
     perfEl.className = `performance-indicator ${overall < 40 ? 'bg-performance-red' : (overall < 60 ? 'bg-performance-orange' : 'bg-performance-green')}`;
 
+    const evalData = getStorage(STORAGE_KEYS.AUDIT, {});
+    const teacherEval = evalData[user.email] || {};
+    let auditScore = 0;
+    let evalCount = 0;
+    AUDIT_MODULES.forEach(mod => {
+        if (teacherEval[mod] && teacherEval[mod].marks !== undefined) {
+            auditScore += Number(teacherEval[mod].marks);
+            evalCount++;
+        }
+    });
+    let auditPct = evalCount > 0 ? Math.round((auditScore / (evalCount * 5)) * 100) : 0;
+
+    let researchPct = 0;
+    if (teacherEval['Research & Consultancy'] && teacherEval['Research & Consultancy'].marks !== undefined) {
+        researchPct = (Number(teacherEval['Research & Consultancy'].marks) / 5) * 100;
+    }
+
     // Charts
     new Chart(document.getElementById('analysisRadarChart'), {
         type: 'radar',
         data: {
-            labels: ['Meetings', 'Syllabus', 'Attendance'],
+            labels: ['Meetings', 'Syllabus', 'Attendance', 'Audit', 'Research'],
             datasets: [{
                 label: 'Performance',
-                data: [meetingScore, syllabusPct, attendancePct],
+                data: [meetingScore, syllabusPct, attendancePct, auditPct, researchPct],
                 backgroundColor: 'rgba(13, 110, 253, 0.2)',
                 borderColor: '#0d6efd',
                 pointBackgroundColor: '#0d6efd'
@@ -615,18 +705,32 @@ const initAnalysis = () => {
         }
     });
 
-    new Chart(document.getElementById('analysisDonutChart'), {
-        type: 'doughnut',
+    new Chart(document.getElementById('analysisBarChart'), {
+        type: 'bar',
         data: {
-            labels: ['Completed', 'Remaining'],
+            labels: ['Meetings', 'Syllabus', 'Attendance', 'Audit', 'Research'],
             datasets: [{
-                data: [overall, 100 - overall],
-                backgroundColor: [overall < 40 ? '#dc3545' : (overall < 60 ? '#fd7e14' : '#198754'), '#e9ecef']
+                label: 'Performance %',
+                data: [meetingScore, syllabusPct, attendancePct, auditPct, researchPct],
+                backgroundColor: [
+                    'rgba(13, 110, 253, 0.7)',
+                    'rgba(25, 135, 84, 0.7)',
+                    'rgba(255, 193, 7, 0.7)',
+                    'rgba(220, 53, 69, 0.7)',
+                    'rgba(111, 66, 193, 0.7)'
+                ],
+                borderWidth: 1
             }]
         },
         options: {
             responsive: true,
-            maintainAspectRatio: false
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100
+                }
+            }
         }
     });
 
@@ -655,20 +759,26 @@ const initAnalysis = () => {
         }
     };
 
-    commentForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const text = document.getElementById('commentText').value;
-        comments.unshift({
-            id: generateId(),
-            text,
-            date: new Date().toISOString(),
-            department: user.department,
-            role: user.role
-        });
-        setStorage(STORAGE_KEYS.COMMENTS, comments);
-        document.getElementById('commentText').value = '';
-        renderComments();
-    });
+    if (commentForm) {
+        if (user.role === 'Teacher') {
+            commentForm.style.display = 'none';
+        } else {
+            commentForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const text = document.getElementById('commentText').value;
+                comments.unshift({
+                    id: generateId(),
+                    text,
+                    date: new Date().toISOString(),
+                    department: user.department,
+                    role: user.role
+                });
+                setStorage(STORAGE_KEYS.COMMENTS, comments);
+                document.getElementById('commentText').value = '';
+                renderComments();
+            });
+        }
+    }
 
     renderComments();
 };
@@ -678,8 +788,8 @@ const initAudit = () => {
     const user = getCurrentUser();
     let auditData = getStorage(STORAGE_KEYS.AUDIT, {});
     
-    if (!auditData[user.department]) {
-        auditData[user.department] = {};
+    if (!auditData[user.email]) {
+        auditData[user.email] = {};
     }
 
     const moduleListEl = document.getElementById('auditModuleList');
@@ -693,7 +803,7 @@ const initAudit = () => {
     let currentModule = null;
 
     const getModuleData = (moduleName) => {
-        const deptData = auditData[user.department];
+        const deptData = auditData[user.email];
         let moduleData = deptData[moduleName];
         
         // Ensure data structure
@@ -956,6 +1066,30 @@ const initAudit = () => {
                             <label class="form-label">Placement %</label>
                             <input type="text" class="form-control bg-light" name="placementPct" id="placementPct" value="${fields.placementPct || ''}" readonly>
                         </div>
+                        <div class="col-md-12">
+                            <label class="form-label">Upload Placement Report</label>
+                            <input type="file" class="form-control" onchange="handleFileUpload(this, 'placementReport')">
+                            <small class="text-muted d-block mt-1">Current: ${files.placementReport || 'None'}</small>
+                        </div>
+                    </div>`;
+                break;
+
+            case 'MoU':
+                formHtml = `
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Active MoUs</label>
+                            <input type="number" class="form-control" name="activeMoUs" value="${fields.activeMoUs || ''}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Activities Conducted under MoU</label>
+                            <input type="number" class="form-control" name="mouActivities" value="${fields.mouActivities || ''}">
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label">Upload MoU Documents</label>
+                            <input type="file" class="form-control" onchange="handleFileUpload(this, 'mouDocs')">
+                            <small class="text-muted d-block mt-1">Current: ${files.mouDocs || 'None'}</small>
+                        </div>
                     </div>`;
                 break;
 
@@ -973,6 +1107,11 @@ const initAudit = () => {
                         <div class="col-md-4">
                             <label class="form-label">Utilization %</label>
                             <input type="text" class="form-control bg-light" name="utilizationPct" id="utilizationPct" value="${fields.utilizationPct || ''}" readonly>
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label">Upload Budget Report</label>
+                            <input type="file" class="form-control" onchange="handleFileUpload(this, 'budgetReport')">
+                            <small class="text-muted d-block mt-1">Current: ${files.budgetReport || 'None'}</small>
                         </div>
                     </div>`;
                 break;
@@ -992,6 +1131,11 @@ const initAudit = () => {
                             <label class="form-label">Conferences Attended</label>
                             <input type="number" class="form-control" name="conferencesAttended" value="${fields.conferencesAttended || ''}">
                         </div>
+                        <div class="col-md-12">
+                            <label class="form-label">Upload Publication Details</label>
+                            <input type="file" class="form-control" onchange="handleFileUpload(this, 'publicationDetails')">
+                            <small class="text-muted d-block mt-1">Current: ${files.publicationDetails || 'None'}</small>
+                        </div>
                     </div>`;
                 break;
 
@@ -1009,6 +1153,11 @@ const initAudit = () => {
                         <div class="col-md-4">
                             <label class="form-label">Grants Received</label>
                             <input type="number" class="form-control" name="grantsReceived" value="${fields.grantsReceived || ''}">
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label">Upload Research Documents</label>
+                            <input type="file" class="form-control" onchange="handleFileUpload(this, 'researchDocs')">
+                            <small class="text-muted d-block mt-1">Current: ${files.researchDocs || 'None'}</small>
                         </div>
                     </div>`;
                 break;
@@ -1032,6 +1181,11 @@ const initAudit = () => {
                                 <option value="Not Applicable" ${fields.amcStatus === 'Not Applicable' ? 'selected' : ''}>Not Applicable</option>
                             </select>
                         </div>
+                        <div class="col-md-12">
+                            <label class="form-label">Upload Maintenance Logs</label>
+                            <input type="file" class="form-control" onchange="handleFileUpload(this, 'maintenanceLogs')">
+                            <small class="text-muted d-block mt-1">Current: ${files.maintenanceLogs || 'None'}</small>
+                        </div>
                     </div>`;
                 break;
 
@@ -1050,6 +1204,11 @@ const initAudit = () => {
                             <label class="form-label">Admission %</label>
                             <input type="text" class="form-control bg-light" name="admissionPct" id="admissionPct" value="${fields.admissionPct || ''}" readonly>
                         </div>
+                        <div class="col-md-12">
+                            <label class="form-label">Upload Admission Report</label>
+                            <input type="file" class="form-control" onchange="handleFileUpload(this, 'admissionReport')">
+                            <small class="text-muted d-block mt-1">Current: ${files.admissionReport || 'None'}</small>
+                        </div>
                     </div>`;
                 break;
 
@@ -1063,6 +1222,11 @@ const initAudit = () => {
                         <div class="col-md-12">
                             <label class="form-label">Non-Technical Achievements</label>
                             <textarea class="form-control" name="nonTechAchievements" rows="3">${fields.nonTechAchievements || ''}</textarea>
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label">Upload Certificates/Proofs</label>
+                            <input type="file" class="form-control" onchange="handleFileUpload(this, 'achievementProofs')">
+                            <small class="text-muted d-block mt-1">Current: ${files.achievementProofs || 'None'}</small>
                         </div>
                     </div>`;
                 break;
@@ -1078,6 +1242,11 @@ const initAudit = () => {
                             <label class="form-label">Impact Description</label>
                             <textarea class="form-control" name="sdgImpact" rows="3">${fields.sdgImpact || ''}</textarea>
                         </div>
+                        <div class="col-md-12">
+                            <label class="form-label">Upload SDG Report</label>
+                            <input type="file" class="form-control" onchange="handleFileUpload(this, 'sdgReport')">
+                            <small class="text-muted d-block mt-1">Current: ${files.sdgReport || 'None'}</small>
+                        </div>
                     </div>`;
                 break;
 
@@ -1092,6 +1261,11 @@ const initAudit = () => {
                             <label class="form-label">Mission Statement</label>
                             <textarea class="form-control" name="missionStatement" rows="4">${fields.missionStatement || ''}</textarea>
                         </div>
+                        <div class="col-md-12">
+                            <label class="form-label">Upload Dissemination Proof</label>
+                            <input type="file" class="form-control" onchange="handleFileUpload(this, 'visionMissionProof')">
+                            <small class="text-muted d-block mt-1">Current: ${files.visionMissionProof || 'None'}</small>
+                        </div>
                     </div>`;
                 break;
 
@@ -1099,12 +1273,33 @@ const initAudit = () => {
                 formHtml = `<div class="alert alert-info">Select a module to view details.</div>`;
         }
 
+        const marks = data.marks !== undefined ? data.marks : 'Not Evaluated';
+        const remarks = data.remarks || 'No remarks yet';
+        let marksHtml = '';
+        if (marks !== 'Not Evaluated') {
+            let pct = (Number(marks) / 5) * 100;
+            let colorClass = pct < 40 ? 'bg-danger-custom p-2 rounded' : 'text-success fw-bold';
+            marksHtml = `
+                <div class="mt-4 p-3 bg-light border rounded">
+                    <h6 class="text-primary"><i class="bi bi-clipboard-data"></i> Admin Evaluation</h6>
+                    <div class="${pct < 40 ? 'bg-danger-custom p-2 rounded' : ''}">
+                        <p class="mb-1"><strong>Mark:</strong> <span class="${pct >= 40 ? colorClass : ''}">${marks} / 5 (${pct}%)</span></p>
+                        <p class="mb-0"><strong>Remarks:</strong> ${remarks}</p>
+                    </div>
+                </div>
+            `;
+        }
+
         formContainerEl.innerHTML = `
             <form id="activeAuditForm">
                 ${formHtml}
+                ${marksHtml}
                 <div class="d-flex justify-content-between align-items-center mt-4 pt-3 border-top">
                     <small class="text-muted">Last updated: ${data.lastUpdated ? formatDate(data.lastUpdated) : 'Never'}</small>
-                    <button type="submit" class="btn btn-primary"><i class="bi bi-save me-2"></i>Save Changes</button>
+                    <div>
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-save me-2"></i>Save Changes</button>
+                        <a href="certificate.html?email=${encodeURIComponent(user.email)}" target="_blank" class="btn btn-success ms-2"><i class="bi bi-award me-2"></i>View Certificate</a>
+                    </div>
                 </div>
             </form>
         `;
@@ -1121,12 +1316,14 @@ const initAudit = () => {
             }
 
             // Merge with existing files
-            const currentFiles = auditData[user.department][currentModule].files || {};
+            const currentFiles = auditData[user.email][currentModule].files || {};
 
-            auditData[user.department][currentModule] = {
+            auditData[user.email][currentModule] = {
                 fields: fieldsData,
                 files: currentFiles,
                 comments: data.comments,
+                marks: data.marks,
+                remarks: data.remarks,
                 lastUpdated: new Date().toISOString()
             };
             
@@ -1148,7 +1345,7 @@ const initAudit = () => {
             if (!data.files) data.files = {};
             data.files[fileKey] = fileName;
             
-            auditData[user.department][currentModule] = data;
+            auditData[user.email][currentModule] = data;
             setStorage(STORAGE_KEYS.AUDIT, auditData);
             
             // Update UI text immediately
@@ -1223,10 +1420,10 @@ const initAudit = () => {
             date: new Date().toISOString()
         };
 
-        auditData[user.department][currentModule].comments.unshift(newComment);
+        auditData[user.email][currentModule].comments.unshift(newComment);
         setStorage(STORAGE_KEYS.AUDIT, auditData);
         input.value = '';
-        renderModuleComments(auditData[user.department][currentModule].comments);
+        renderModuleComments(auditData[user.email][currentModule].comments);
     };
 
     renderSidebarList();
@@ -1240,7 +1437,7 @@ const initScheduler = () => {
     const form = document.getElementById('scheduleForm');
 
     const render = () => {
-        const deptSchedule = schedule.filter(s => s.department === user.department);
+        const deptSchedule = user.role === 'Admin' ? schedule : schedule.filter(s => s.department === user.department);
         // Sort by date
         deptSchedule.sort((a, b) => new Date(a.date) - new Date(b.date));
 
@@ -1256,7 +1453,7 @@ const initScheduler = () => {
                             </div>
                             <p class="card-text small">${s.description}</p>
                         </div>
-                        <button class="btn btn-sm btn-outline-danger" onclick="deleteSchedule('${s.id}')"><i class="bi bi-trash"></i></button>
+                        ${user.role !== 'HOD' ? `<button class="btn btn-sm btn-outline-danger" onclick="deleteSchedule('${s.id}')"><i class="bi bi-trash"></i></button>` : ''}
                     </div>
                 </div>
             </div>
@@ -1264,6 +1461,7 @@ const initScheduler = () => {
     };
 
     window.deleteSchedule = (id) => {
+        if (user.role === 'HOD') return;
         if (confirm('Cancel this event?')) {
             schedule = schedule.filter(s => s.id !== id);
             setStorage(STORAGE_KEYS.SCHEDULE, schedule);
@@ -1271,34 +1469,498 @@ const initScheduler = () => {
         }
     };
 
-    form.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const newItem = {
-            id: generateId(),
-            department: user.department,
-            title: document.getElementById('schTitle').value,
-            date: document.getElementById('schDate').value,
-            time: document.getElementById('schTime').value,
-            description: document.getElementById('schDesc').value
-        };
-        schedule.push(newItem);
-        setStorage(STORAGE_KEYS.SCHEDULE, schedule);
-        form.reset();
-        render();
-        alert('Event scheduled!');
-    });
+    if (form) {
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            if (user.role === 'HOD') return;
+            const newItem = {
+                id: generateId(),
+                department: user.department,
+                title: document.getElementById('schTitle').value,
+                date: document.getElementById('schDate').value,
+                time: document.getElementById('schTime').value,
+                description: document.getElementById('schDesc').value
+            };
+            schedule.push(newItem);
+            setStorage(STORAGE_KEYS.SCHEDULE, schedule);
+            form.reset();
+            render();
+            alert('Event scheduled!');
+        });
+    }
 
     render();
 };
 
+// 9. Admin Panel
+const initAdminPanel = () => {
+    const user = getCurrentUser();
+    if (user.role !== 'Admin') {
+        window.location.href = 'dashboard.html';
+        return;
+    }
+
+    const deptFilter = document.getElementById('deptFilter');
+    const teacherList = document.getElementById('teacherList');
+    const evaluationContainer = document.getElementById('evaluationContainer');
+    const generateCertBtn = document.getElementById('generateCertBtn');
+
+    let allUsers = getStorage(STORAGE_KEYS.USERS, []);
+    let auditData = getStorage(STORAGE_KEYS.AUDIT, {});
+    let currentTeacherEmail = null;
+
+    const renderTeachers = () => {
+        const selectedDept = deptFilter.value;
+        const teachers = allUsers.filter(u => u.role === 'Teacher' && (selectedDept === 'All' || u.department === selectedDept));
+
+        teacherList.innerHTML = teachers.map(t => {
+            const tData = auditData[t.email] || {};
+            const modulesCount = Object.keys(tData).length;
+            const isEvaluated = Object.values(tData).every(m => m.marks !== undefined);
+            const badge = isEvaluated && modulesCount > 0 ? '<span class="badge bg-success">Evaluated</span>' : '<span class="badge bg-warning">Pending</span>';
+
+            return `
+                <a href="#" class="list-group-item list-group-item-action" onclick="loadTeacherEvaluation('${t.email}')">
+                    <div class="d-flex w-100 justify-content-between">
+                        <h6 class="mb-1">${t.name}</h6>
+                        ${badge}
+                    </div>
+                    <small class="text-muted">${t.department}</small>
+                </a>
+            `;
+        }).join('') || '<p class="text-muted text-center mt-3">No teachers found.</p>';
+    };
+
+    window.loadTeacherEvaluation = (email) => {
+        currentTeacherEmail = email;
+        const tUser = allUsers.find(u => u.email === email);
+        const tData = auditData[email] || {};
+
+        if (Object.keys(tData).length === 0) {
+            evaluationContainer.innerHTML = `<div class="alert alert-info">No audit data submitted by ${tUser.name} yet.</div>`;
+            generateCertBtn.style.display = 'none';
+            return;
+        }
+
+        let totalMarks = 0;
+        let evaluatedCount = 0;
+        const maxMarksPerModule = 5;
+        const totalModules = Object.keys(tData).length;
+
+        let html = `<h5>Evaluating: ${tUser.name} (${tUser.department})</h5>
+                    <form id="evaluationForm">
+                        <div class="table-responsive mt-3">
+                            <table class="table table-bordered table-hover align-middle">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Module</th>
+                                        <th>Files Uploaded</th>
+                                        <th>Marks (Out of 5)</th>
+                                        <th>Remarks</th>
+                                    </tr>
+                                </thead>
+                                <tbody>`;
+
+        for (const [moduleName, mData] of Object.entries(tData)) {
+            const files = mData.files ? Object.values(mData.files).join(', ') : 'None';
+            
+            const marks = mData.marks !== undefined ? mData.marks : '';
+            const remarks = mData.remarks || '';
+            
+            if (marks !== '') {
+                totalMarks += Number(marks);
+                evaluatedCount++;
+            }
+
+            const isLowScore = marks !== '' && Number(marks) < 2.5;
+            const rowClass = isLowScore ? 'bg-danger-custom' : '';
+
+            html += `
+                <tr class="${rowClass}">
+                    <td>${moduleName}</td>
+                    <td><small>${files}</small></td>
+                    <td>
+                        <input type="number" class="form-control form-control-sm" name="marks_${moduleName}" value="${marks}" min="0" max="5" step="0.5" required>
+                    </td>
+                    <td>
+                        <input type="text" class="form-control form-control-sm" name="remarks_${moduleName}" value="${remarks}" placeholder="Enter remarks">
+                    </td>
+                </tr>
+            `;
+        }
+
+        const percentage = totalModules > 0 ? ((totalMarks / (totalModules * maxMarksPerModule)) * 100).toFixed(2) : 0;
+        const isFullyEvaluated = evaluatedCount === totalModules && totalModules > 0;
+
+        html += `       </tbody>
+                    </table>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mt-3">
+                    <div>
+                        <strong>Total Score:</strong> ${totalMarks} / ${totalModules * maxMarksPerModule} <br>
+                        <strong>Percentage:</strong> ${percentage}%
+                    </div>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-save me-2"></i>Save Evaluation</button>
+                </div>
+            </form>`;
+
+        evaluationContainer.innerHTML = html;
+
+        if (isFullyEvaluated) {
+            generateCertBtn.style.display = 'inline-block';
+            generateCertBtn.onclick = () => {
+                window.open(`certificate.html?email=${encodeURIComponent(email)}`, '_blank');
+            };
+        } else {
+            generateCertBtn.style.display = 'none';
+        }
+
+        document.getElementById('evaluationForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            
+            for (const moduleName of Object.keys(tData)) {
+                if (!auditData[email][moduleName]) auditData[email][moduleName] = {};
+                auditData[email][moduleName].marks = formData.get(`marks_${moduleName}`);
+                auditData[email][moduleName].remarks = formData.get(`remarks_${moduleName}`);
+            }
+
+            setStorage(STORAGE_KEYS.AUDIT, auditData);
+            alert('Evaluation saved successfully!');
+            loadTeacherEvaluation(email); // Reload to update totals and button
+            renderTeachers(); // Update badges
+        });
+    };
+
+    deptFilter.addEventListener('change', renderTeachers);
+    renderTeachers();
+};
+
+// 10. HOD View
+const initHodView = () => {
+    const user = getCurrentUser();
+    if (user.role !== 'HOD' && user.role !== 'Admin') {
+        window.location.href = 'dashboard.html';
+        return;
+    }
+
+    const teacherList = document.getElementById('hodTeacherList');
+    const detailsContainer = document.getElementById('hodTeacherDetails');
+    const deptFilter = document.getElementById('hodDeptFilter');
+
+    if (user.role === 'Admin' && deptFilter) {
+        deptFilter.style.display = 'block';
+    }
+
+    let allUsers = getStorage(STORAGE_KEYS.USERS, []);
+    let auditData = getStorage(STORAGE_KEYS.AUDIT, {});
+
+    const renderTeachers = () => {
+        const selectedDept = user.role === 'Admin' && deptFilter ? deptFilter.value : user.department;
+        const teachers = allUsers.filter(u => u.role === 'Teacher' && (selectedDept === 'All' || u.department === selectedDept));
+
+        teacherList.innerHTML = teachers.map(t => {
+            const tData = auditData[t.email] || {};
+            
+            let isEvaluated = false;
+            if (Object.keys(tData).length > 0) {
+                isEvaluated = Object.keys(tData).every(m => tData[m] && tData[m].marks !== undefined && tData[m].marks !== '');
+            }
+            
+            const badge = isEvaluated ? '<span class="badge bg-success">Evaluated</span>' : '<span class="badge bg-warning">Pending</span>';
+            const deptBadge = user.role === 'Admin' ? `<small class="text-muted d-block mt-1">${t.department}</small>` : '';
+
+            return `
+                <a href="#" class="list-group-item list-group-item-action" onclick="loadHodTeacherDetails('${t.email}')">
+                    <div class="d-flex w-100 justify-content-between">
+                        <h6 class="mb-1">${t.name}</h6>
+                        ${badge}
+                    </div>
+                    ${deptBadge}
+                </a>
+            `;
+        }).join('') || '<p class="text-muted text-center mt-3">No teachers found.</p>';
+    };
+
+    if (user.role === 'Admin' && deptFilter) {
+        deptFilter.addEventListener('change', renderTeachers);
+    }
+
+    window.loadHodTeacherDetails = (email) => {
+        const tUser = allUsers.find(u => u.email === email);
+        const tData = auditData[email] || {};
+
+        if (Object.keys(tData).length === 0) {
+            detailsContainer.innerHTML = `<div class="alert alert-info">No audit data submitted by ${tUser.name} yet.</div>`;
+            return;
+        }
+
+        let totalMarks = 0;
+        let evaluatedCount = 0;
+        const maxMarksPerModule = 5;
+        const totalModules = Object.keys(tData).length;
+
+        let html = `<h5>Details for: ${tUser.name}</h5>
+                    <div class="table-responsive mt-3">
+                        <table class="table table-bordered table-hover align-middle">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Module</th>
+                                    <th>Marks (Out of 5)</th>
+                                    <th>Remarks</th>
+                                </tr>
+                            </thead>
+                            <tbody>`;
+
+        for (const [moduleName, mData] of Object.entries(tData)) {
+            const marks = mData.marks !== undefined && mData.marks !== '' ? mData.marks : 'Pending';
+            const remarks = mData.remarks || '-';
+            
+            if (marks !== 'Pending') {
+                totalMarks += Number(marks);
+                evaluatedCount++;
+            }
+
+            const isLowScore = marks !== 'Pending' && Number(marks) < 2.5;
+            const rowClass = isLowScore ? 'bg-danger-custom' : '';
+
+            html += `
+                <tr class="${rowClass}">
+                    <td>${moduleName}</td>
+                    <td>${marks}</td>
+                    <td>${remarks}</td>
+                </tr>
+            `;
+        }
+
+        const percentage = totalModules > 0 ? ((totalMarks / (totalModules * maxMarksPerModule)) * 100).toFixed(2) : 0;
+        const isFullyEvaluated = evaluatedCount === totalModules && totalModules > 0;
+
+        html += `       </tbody>
+                    </table>
+                </div>
+                <div class="mt-3">
+                    <strong>Total Score:</strong> ${totalMarks} / ${totalModules * maxMarksPerModule} <br>
+                    <strong>Percentage:</strong> ${percentage}%
+                </div>`;
+
+        if (isFullyEvaluated) {
+            html += `
+                <div class="mt-4">
+                    <a href="certificate.html?email=${encodeURIComponent(email)}" target="_blank" class="btn btn-success"><i class="bi bi-download me-2"></i>Download Certificate</a>
+                </div>
+            `;
+        }
+
+        detailsContainer.innerHTML = html;
+    };
+
+    renderTeachers();
+};
+
+// 11. Admin Grading
+const initAdminGrading = () => {
+    const user = getCurrentUser();
+    if (user.role !== 'Admin') {
+        window.location.href = 'dashboard.html';
+        return;
+    }
+
+    const deptFilter = document.getElementById('gradingDeptFilter');
+    const teacherList = document.getElementById('gradingTeacherList');
+    const gradingContainer = document.getElementById('gradingContainer');
+
+    let allUsers = getStorage(STORAGE_KEYS.USERS, []);
+    let gradingData = getStorage('cad_grading', {});
+
+    const criteriaList = [
+        'Outcome-Based Curriculum',
+        'Teaching Learning',
+        'Assessment',
+        'Students Performance',
+        'Faculty Info',
+        'Contributions',
+        'Facilities',
+        'Improvement',
+        'Governance'
+    ];
+
+    const renderTeachers = () => {
+        const selectedDept = deptFilter.value;
+        const teachers = allUsers.filter(u => u.role === 'Teacher' && (selectedDept === 'All' || u.department === selectedDept));
+
+        teacherList.innerHTML = teachers.map(t => {
+            const tData = gradingData[t.email] || {};
+            const isGraded = tData.totalMarks !== undefined;
+            const badge = isGraded ? '<span class="badge bg-success">Graded</span>' : '<span class="badge bg-warning">Pending</span>';
+
+            return `
+                <a href="#" class="list-group-item list-group-item-action" onclick="loadTeacherGrading('${t.email}')">
+                    <div class="d-flex w-100 justify-content-between">
+                        <h6 class="mb-1">${t.name}</h6>
+                        ${badge}
+                    </div>
+                    <small class="text-muted">${t.department}</small>
+                </a>
+            `;
+        }).join('') || '<p class="text-muted text-center mt-3">No teachers found.</p>';
+    };
+
+    window.loadTeacherGrading = (email) => {
+        const tUser = allUsers.find(u => u.email === email);
+        const tData = gradingData[email] || { marks: {} };
+
+        let html = `<h5>Grading: ${tUser.name} (${tUser.department})</h5>
+                    <form id="gradingForm">
+                        <div class="table-responsive mt-3">
+                            <table class="table table-bordered table-hover align-middle">
+                                <thead class="table-dark">
+                                    <tr>
+                                        <th>Criteria</th>
+                                        <th>Marks (0-5)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>`;
+
+        criteriaList.forEach(criteria => {
+            const mark = tData.marks[criteria] !== undefined ? tData.marks[criteria] : '';
+            html += `
+                <tr>
+                    <td>${criteria}</td>
+                    <td>
+                        <input type="number" class="form-control form-control-sm grading-input" name="mark_${criteria}" value="${mark}" min="0" max="5" step="0.5" required>
+                    </td>
+                </tr>
+            `;
+        });
+
+        html += `       </tbody>
+                    </table>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Overall Remarks</label>
+                    <textarea class="form-control" name="overallRemarks" rows="2" required>${tData.overallRemarks || ''}</textarea>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Improvement Suggestions</label>
+                    <textarea class="form-control" name="improvementSuggestions" rows="2" required>${tData.improvementSuggestions || ''}</textarea>
+                </div>
+                <div class="d-flex justify-content-between align-items-center mt-3">
+                    <div id="gradingSummary">
+                        <strong>Total Score:</strong> <span id="totalGradingScore">0</span> / 45 <br>
+                        <strong>Percentage:</strong> <span id="gradingPercentage">0</span>%
+                    </div>
+                    <div>
+                        <button type="submit" class="btn btn-primary"><i class="bi bi-save me-2"></i>Save & Generate Certificate</button>
+                    </div>
+                </div>
+            </form>`;
+
+        gradingContainer.innerHTML = html;
+
+        const updateSummary = () => {
+            const inputs = document.querySelectorAll('.grading-input');
+            let total = 0;
+            inputs.forEach(input => {
+                total += Number(input.value) || 0;
+            });
+            const pct = ((total / 45) * 100).toFixed(2);
+            document.getElementById('totalGradingScore').innerText = total;
+            document.getElementById('gradingPercentage').innerText = pct;
+            
+            const summaryDiv = document.getElementById('gradingSummary');
+            if (pct < 40) {
+                summaryDiv.className = 'text-danger fw-bold';
+            } else {
+                summaryDiv.className = 'text-success fw-bold';
+            }
+        };
+
+        const inputs = document.querySelectorAll('.grading-input');
+        inputs.forEach(input => input.addEventListener('input', updateSummary));
+        updateSummary();
+
+        document.getElementById('gradingForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            
+            const marks = {};
+            let totalMarks = 0;
+            criteriaList.forEach(criteria => {
+                const val = Number(formData.get(`mark_${criteria}`));
+                marks[criteria] = val;
+                totalMarks += val;
+            });
+
+            const percentage = ((totalMarks / 45) * 100).toFixed(2);
+
+            gradingData[email] = {
+                marks,
+                totalMarks,
+                percentage,
+                overallRemarks: formData.get('overallRemarks'),
+                improvementSuggestions: formData.get('improvementSuggestions'),
+                lastUpdated: new Date().toISOString()
+            };
+
+            setStorage('cad_grading', gradingData);
+            alert('Grading saved successfully! Certificate is ready.');
+            renderTeachers();
+            
+            // Auto open certificate
+            window.open(`certificate.html?email=${encodeURIComponent(email)}`, '_blank');
+        });
+    };
+
+    deptFilter.addEventListener('change', renderTeachers);
+    renderTeachers();
+};
+
+const initializeSampleData = () => {
+    let users = getStorage(STORAGE_KEYS.USERS, []);
+    const sampleEmail = 'jane.doe@college.edu';
+    
+    if (!users.find(u => u.email === sampleEmail)) {
+        users.push({
+            name: 'Dr. Jane Doe',
+            email: sampleEmail,
+            role: 'Teacher',
+            department: 'CSE'
+        });
+        setStorage(STORAGE_KEYS.USERS, users);
+        
+        let auditData = getStorage(STORAGE_KEYS.AUDIT, {});
+        auditData[sampleEmail] = {};
+        
+        // Add some sample modules
+        const sampleModules = ['DQAC Module', 'Program Exit Survey', 'CO-PO Module', 'Project Evaluation', 'Guest Lecture & Industrial Visits'];
+        
+        sampleModules.forEach(mod => {
+            auditData[sampleEmail][mod] = {
+                files: {
+                    file1: `${mod.replace(/ /g, '_').toLowerCase()}_report.pdf`
+                },
+                comments: [],
+                marks: '',
+                remarks: '',
+                lastUpdated: new Date().toISOString()
+            };
+        });
+        
+        setStorage(STORAGE_KEYS.AUDIT, auditData);
+    }
+};
+
 // --- Main Init ---
 document.addEventListener('DOMContentLoaded', () => {
+    initializeSampleData();
+
     const path = window.location.pathname;
     const page = path.split('/').pop() || 'index.html';
 
     const user = checkAuth();
 
-    if (page !== 'index.html' && page !== '') {
+    if (page !== 'index.html' && page !== '' && page !== 'certificate.html') {
         const activePage = page.replace('.html', '');
         renderSidebar(activePage);
         updateNotificationBadge();
@@ -1313,4 +1975,7 @@ document.addEventListener('DOMContentLoaded', () => {
     else if (page === 'analysis.html') initAnalysis();
     else if (page === 'audit.html') initAudit();
     else if (page === 'scheduler.html') initScheduler();
+    else if (page === 'admin-panel.html') initAdminPanel();
+    else if (page === 'hod-view.html') initHodView();
+    else if (page === 'admin-grading.html') initAdminGrading();
 });

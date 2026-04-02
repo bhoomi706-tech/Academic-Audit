@@ -294,6 +294,19 @@ body {
 .bg-performance-orange { background-color: #fd7e14; } /* Orange */
 .bg-performance-green { background-color: var(--success-color); }
 
+/* Custom Danger Highlight for Tables */
+.bg-danger-custom {
+    background-color: var(--danger-color) !important;
+    color: white !important;
+}
+.bg-danger-custom input {
+    background-color: rgba(255, 255, 255, 0.9) !important;
+    color: #000 !important;
+}
+.bg-danger-custom td {
+    color: white !important;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     #sidebar {
